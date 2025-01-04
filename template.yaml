@@ -116,11 +116,11 @@ Parameters:
   AWSAmiId:
     Type: String
     Description: AWS AMI ID
-    Default: ami-06744fbd0847bf4f5
+    Default: ami-0b4624933067d393a
     AllowedValues:
-      - ami-06744fbd0847bf4f5  # Amazon Linux 2 (ejemplo)
-      - ami-1234567890abcdef0  # Otra opción de AMI
-      - ami-0abcdef1234567890  # Otra opción de AMI
+      - ami-06744fbd0847bf4f5 # Amazon Linux 2 (eg)
+      - ami-1234567890abcdef0
+      - ami-0abcdef1234567890
     ConstraintDescription: Must be a valid AMI ID from the list.
   JenkinsVpc:
     Type: AWS::EC2::VPC::Id
@@ -202,12 +202,14 @@ Parameters:
     Description: Jenkins Security Group
   JenkinsAllowSSHFrom:
     Type: String
-    Description: CIDR block to allow SSH access (e.g., 0.0.0.0/0 for all IPs, or a specific range like 192.168.1.0/24).
+    Description: CIDR block to allow SSH access (e.g., 0.0.0.0/0 for all IPs, or a
+      specific range like 192.168.1.0/24).
     Default: 0.0.0.0/0
   JenkinsSecurityGroupName:
     Type: String
-    Description: Name of the new Security Group to be created, or leave empty to use an existing one.
-    Default: ""
+    Description: Name of the new Security Group to be created, or leave empty to use
+      an existing one.
+    Default: ''
   JenkinsVolumeSize:
     Type: Number
     Description: Jenkins Volume Size
@@ -240,8 +242,9 @@ Parameters:
     ConstraintDescription: Must be a valid boolean value from the list.
   JenkinsVolumeKmsKeyId:
     Type: String
-    Description: KMS Key ID for encrypting the Jenkins volume. Leave empty to use default AWS-managed key.
-    Default: ""
+    Description: KMS Key ID for encrypting the Jenkins volume. Leave empty to use
+      default AWS-managed key.
+    Default: ''
   JenkinsVolumeDeleteOnTermination:
     Type: String
     Description: Jenkins Volume Delete On Termination
@@ -259,8 +262,13 @@ Parameters:
     Default: /var/log/deploy.log
 
 Conditions:
-  CreateSecurityGroup: !Equals [!Ref JenkinsSecurityGroupName, ""]
-  CreateKmsKey: !Not [!Equals [!Ref JenkinsVolumeKmsKeyId, ""]]
+  CreateSecurityGroup: !Equals
+    - !Ref JenkinsSecurityGroupName
+    - ''
+  CreateKmsKey: !Not
+    - !Equals
+      - !Ref JenkinsVolumeKmsKeyId
+      - ''
 
 Resources:
   JenkinsCustomSecurityGroup:
@@ -302,44 +310,50 @@ Resources:
             KmsKeyId: !If
               - CreateKmsKey
               - !Ref JenkinsVolumeKmsKeyId
-              - !Ref "AWS::NoValue"
+              - !Ref AWS::NoValue
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash
           # Enable strict error handling
           set -e
-          
           # Error handling
           trap 'echo "Error on line $LINENO. Failed command: $BASH_COMMAND" >> ${LogDeploy}' ERR
-          
           # Logging function
           log_message() {
             echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> ${LogDeploy}
           }
-          
           log_message "Starting installation script"
-          
-          # Install Java 11
-          log_message "Installing Java 11"
-          sudo amazon-linux-extras enable java-openjdk11 || { log_message "Error enabling Java 11"; exit 1; }
-          sudo yum install java-11-openjdk -y || { log_message "Error installing Java 11"; exit 1; }
+          sudo dnf update -y >> ${LogDeploy} 2>&1
+          sudo dnf clean packages
+
+          # Install Java 17
+          log_message "Installing Java 17"
+          sudo dnf install java-17-amazon-corretto -y || { log_message "Error enabling Java 17"; exit 1; }
           java -version >> ${LogDeploy} 2>&1
-          
+
           # Install Git
           log_message "Installing Git"
-          sudo yum install git -y || { log_message "Error installing Git"; exit 1; }
+          sudo dnf install git -y || { log_message "Error installing Git"; exit 1; }
           git --version >> ${LogDeploy}
-          
+
           # Install Jenkins
           log_message "Installing Jenkins"
-          sudo rpm --import https://pkg.jenkins.io/redhat/jenkins.io.key
-          sudo curl -o /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat/jenkins.repo
-          sudo yum install jenkins -y || { log_message "Error instalando Jenkins"; exit 1; }
+          sudo curl -fsSL https://pkg.jenkins.io/redhat-stable/jenkins.io.key | sudo tee /etc/pki/rpm-gpg/RPM-GPG-KEY-jenkins
+          sudo sh -c 'echo -e "[jenkins]\nname=Jenkins-stable\nbaseurl=https://pkg.jenkins.io/redhat-stable\nenabled=1\ngpgcheck=1" > /etc/yum.repos.d/jenkins.repo'
           
-          # Start Jenkins service
-          log_message "Initiating Jenkins service"
-          sudo systemctl start jenkins
+          # Confirm GPG key for Jenkins is installed
+          sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-jenkins
+
+          cat /etc/yum.repos.d/jenkins.repo >> ${LogDeploy}
+
+          sudo dnf install jenkins -y || { log_message "Error installing Jenkins"; exit 1; }
+
           sudo systemctl enable jenkins
+          sudo systemctl start jenkins
+          sudo systemctl restart jenkins
+          
+          sudo systemctl status jenkins >> ${LogDeploy} 2>&1
+
           
           # Verify installation
           if sudo systemctl is-active jenkins >/dev/null 2>&1; then
@@ -348,7 +362,7 @@ Resources:
             log_message "Error: Jenkins is not running"
             exit 1
           fi
-
+          sudo cat /var/lib/jenkins/secrets/initialAdminPassword >> ${LogDeploy}
           log_message "Installation script completed"
 
 Outputs:
