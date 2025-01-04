@@ -1,0 +1,341 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation Template for JENKINS Server on EC2
+Metadata:
+  Authors:
+    Description: Andres Jose Sanchez (andresjose84@gmail.com)
+  License:
+    Description: MIT License
+    Details: |
+      Copyright (c) 2023 Andres Jose Sanchez
+      Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files, to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so.
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: AWS Parameters
+        Parameters:
+          - AWSRegion
+          - AWSAmiId
+          - JenkinsVpc
+      - Label:
+          default: Jenkins Configuration
+        Parameters:
+          - JenkinsInstanceName
+          - JenkinsInstanceType
+          - JenkinsKeyPair
+          - JenkinsSubnet
+          - JenkinsSecurityGroup
+          - JenkinsVolumeSize
+          - JenkinsVolumeType
+          - JenkinsVolumeIOPS
+          - JenkinsVolumeEncrypted
+          - JenkinsVolumeKmsKeyId
+          - JenkinsVolumeDeleteOnTermination
+          - JenkinsVolumeSnapshotId
+          - JenkinsVolumeTags
+          - JenkinsAllowSSHFrom
+          - JenkinsSecurityGroupName
+      - Label:
+          default: Path Log Deploy
+        Parameters:
+          - LogDeploy
+    ParameterLabels:
+      - AWSRegion:
+          default: AWS Region
+      - AWSAmiId:
+          default: AWS AMI ID
+      - JenkinsVpc:
+          default: Jenkins VPC
+      - JenkinsInstanceName:
+          default: Jenkins Instance Name
+      - JenkinsInstanceType:
+          default: Jenkins Instance Type
+      - JenkinsKeyPair:
+          default: Jenkins Key Pair
+      - JenkinsSubnet:
+          default: Jenkins Subnet
+      - JenkinsSecurityGroup:
+          default: Jenkins Security Group
+      - JenkinsVolumeSize:
+          default: Jenkins Volume Size
+      - JenkinsVolumeType:
+          default: Jenkins Volume Type
+      - JenkinsVolumeIOPS:
+          default: Jenkins Volume IOPS
+      - JenkinsVolumeEncrypted:
+          default: Jenkins Volume Encrypted
+      - JenkinsVolumeKmsKeyId:
+          default: Jenkins Volume KMS Key ID
+      - JenkinsVolumeDeleteOnTermination:
+          default: Jenkins Volume Delete On Termination
+      - JenkinsVolumeSnapshotId:
+          default: Jenkins Volume Snapshot ID
+      - JenkinsVolumeTags:
+          default: Jenkins Volume Tags
+      - JenkinsAllowSSHFrom:
+          default: Allow SSH Traffic From
+      - JenkinsSecurityGroupName:
+          default: Jenkins Security Group Name
+      - LogDeploy:
+          default: Path Log Deploy
+
+Parameters:
+  AWSRegion:
+    Type: String
+    Description: AWS Region
+    Default: us-east-1
+    AllowedValues:
+      - af-south-1
+      - ap-east-1
+      - ap-northeast-1
+      - ap-northeast-2
+      - ap-south-1
+      - ap-southeast-1
+      - ap-southeast-2
+      - ca-central-1
+      - cn-north-1
+      - cn-northwest-1
+      - eu-central-1
+      - eu-north-1
+      - eu-south-1
+      - eu-west-1
+      - eu-west-2
+      - eu-west-3
+      - me-south-1
+      - sa-east-1
+      - us-east-1
+      - us-east-2
+      - us-gov-east-1
+      - us-gov-west-1
+      - us-west-1
+      - us-west-2
+      - us-west-3
+      - us-west-4
+      - us-west-5
+    ConstraintDescription: Must be a valid AWS region from the list.
+  AWSAmiId:
+    Type: String
+    Description: AWS AMI ID
+    Default: ami-06744fbd0847bf4f5
+    AllowedValues:
+      - ami-06744fbd0847bf4f5  # Amazon Linux 2 (ejemplo)
+      - ami-1234567890abcdef0  # Otra opción de AMI
+      - ami-0abcdef1234567890  # Otra opción de AMI
+    ConstraintDescription: Must be a valid AMI ID from the list.
+  JenkinsVpc:
+    Type: AWS::EC2::VPC::Id
+    Description: ID of the VPC where the resources will be deployed.
+  JenkinsInstanceType:
+    Type: String
+    Description: Jenkins Instance Type
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t2.xlarge
+      - t2.2xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.12xlarge
+      - m5.24xlarge
+      - m5a.large
+      - m5a.xlarge
+      - m5a.2xlarge
+      - m5a.4xlarge
+      - m5a.12xlarge
+      - m5a.24xlarge
+      - m5n.large
+      - m5n.xlarge
+      - m5n.2xlarge
+      - m5n.4xlarge
+      - m5n.12xlarge
+      - m5n.24xlarge
+      - m5ad.large
+      - m5ad.xlarge
+      - m5ad.2xlarge
+      - m5ad.4xlarge
+      - m5ad.12xlarge
+      - m5ad.24xlarge
+      - m5d.large
+      - m5d.xlarge
+      - m5d.2xlarge
+      - m5d.4xlarge
+      - m5d.12xlarge
+      - m5d.24xlarge
+      - m5dn.large
+      - m5dn.xlarge
+      - m5dn.2xlarge
+      - m5dn.4xlarge
+      - m5dn.12xlarge
+      - m5dn.24xlarge
+      - m5n.large
+      - m5n.xlarge
+      - m5n.2xlarge
+      - m5n.4xlarge
+      - m5n.12xlarge
+      - m5n.24xlarge
+      - m5zn.large
+      - m5zn.xlarge
+      - m5zn.2xlarge
+      - m5zn.3xlarge
+  JenkinsKeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Jenkins Key Pair
+  JenkinsSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: Jenkins Subnet
+  JenkinsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Jenkins Security Group
+  JenkinsAllowSSHFrom:
+    Type: String
+    Description: CIDR block to allow SSH access (e.g., 0.0.0.0/0 for all IPs, or a specific range like 192.168.1.0/24).
+    Default: 0.0.0.0/0
+  JenkinsSecurityGroupName:
+    Type: String
+    Description: Name of the new Security Group to be created, or leave empty to use an existing one.
+    Default: ""
+  JenkinsVolumeSize:
+    Type: Number
+    Description: Jenkins Volume Size
+    Default: '16'
+    MinValue: '8'
+    MaxValue: '1024'
+    ConstraintDescription: Must be between 8 and 1024
+  JenkinsVolumeType:
+    Type: String
+    Description: Jenkins Volume Type
+    Default: gp2
+    AllowedValues:
+      - gp2
+      - gp3
+    ConstraintDescription: Must be a valid volume type from the list.
+  JenkinsVolumeIOPS:
+    Type: Number
+    Description: Jenkins Volume IOPS
+    Default: '3000'
+    MinValue: '100'
+    MaxValue: '20000'
+    ConstraintDescription: Must be between 100 and 20000
+  JenkinsVolumeEncrypted:
+    Type: String
+    Description: Jenkins Volume Encrypted
+    Default: 'false'
+    AllowedValues:
+      - true
+      - false
+    ConstraintDescription: Must be a valid boolean value from the list.
+  JenkinsVolumeKmsKeyId:
+    Type: String
+    Description: KMS Key ID for encrypting the Jenkins volume. Leave empty to use default AWS-managed key.
+    Default: ""
+  JenkinsVolumeDeleteOnTermination:
+    Type: String
+    Description: Jenkins Volume Delete On Termination
+    Default: 'true'
+    AllowedValues:
+      - true
+      - false
+    ConstraintDescription: Must be a valid boolean value from the list.
+  JenkinsVolumeTags:
+    Type: String
+    Description: Jenkins Volume Tags
+  LogDeploy:
+    Type: String
+    Description: Path Log Deploy
+    Default: /var/log/deploy
+
+Conditions:
+  CreateSecurityGroup: !Equals [!Ref JenkinsSecurityGroupName, ""]
+  CreateKmsKey: !Not [!Equals [!Ref JenkinsVolumeKmsKeyId, ""]]
+
+Resources:
+  JenkinsCustomSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateSecurityGroup
+    Properties:
+      GroupDescription: Security Group for Jenkins Server
+      VpcId: !Ref JenkinsVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref JenkinsAllowSSHFrom
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+  JenkinsInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AWSAmiId
+      InstanceType: !Ref JenkinsInstanceType
+      KeyName: !Ref JenkinsKeyPair
+      SubnetId: !Ref JenkinsSubnet
+      SecurityGroupIds:
+        - !If
+          - CreateSecurityGroup
+          - !Ref JenkinsCustomSecurityGroup
+          - !Ref JenkinsSecurityGroupName
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref JenkinsVolumeSize
+            VolumeType: !Ref JenkinsVolumeType
+            Iops: !Ref JenkinsVolumeIOPS
+            Encrypted: !Ref JenkinsVolumeEncrypted
+            DeleteOnTermination: !Ref JenkinsVolumeDeleteOnTermination
+            KmsKeyId: !If
+              - CreateKmsKey
+              - !Ref JenkinsVolumeKmsKeyId
+              - !Ref "AWS::NoValue"
+      UserData: !Base64
+        Fn::Sub: |
+          #!/bin/bash
+          sudo amazon-linux-extras enable java-openjdk11
+          sudo yum install java-11-openjdk -y
+          java -version
+          sudo yum install git -y
+          git --version
+          sudo rpm --import https://pkg.jenkins.io/redhat/jenkins.io.key
+          sudo tee /etc/yum.repos.d/jenkins.repo <<EOF
+          [jenkins]
+          name=Jenkins-stable
+          baseurl=https://pkg.jenkins.io/redhat-stable
+          gpgcheck=1
+          EOF
+          sudo yum install jenkins -y
+          sudo systemctl start jenkins
+          sudo systemctl enable jenkins
+          sudo systemctl status jenkins
+          echo "Jenkins is installed and running"
+Outputs:
+  JenkinsInstance:
+    Description: Jenkins Instance
+    Value: !Ref JenkinsInstance
+    Export:
+      Name: !Sub ${AWS::StackName}-JenkinsInstance
+  JenkinsInstancePublicDNS:
+    Description: Jenkins Instance Public DNS
+    Value: !GetAtt JenkinsInstance.PublicDnsName
+    Export:
+      Name: !Sub ${AWS::StackName}-JenkinsInstancePublicDNS
+  JenkinsInstancePublicIP:
+    Description: Jenkins Instance Public IP
+    Value: !GetAtt JenkinsInstance.PublicIp
+    Export:
+      Name: !Sub ${AWS::StackName}-JenkinsInstancePublicIP
