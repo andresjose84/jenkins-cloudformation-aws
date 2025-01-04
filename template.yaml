@@ -306,32 +306,50 @@ Resources:
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash
-          #TODO: Add your custom user data script here
-          # Install Java 11, Git, Jenkins
-          echo "$(date '+%Y-%m-%d %H:%M:%S') Init Deploy Script" >> ${LogDeploy}
-          sudo amazon-linux-extras enable java-openjdk11
-          sudo yum install java-11-openjdk -y
-          java -version >> ${LogDeploy}
-          sudo yum install git -y
+          # Enable strict error handling
+          set -e
+          
+          # Error handling
+          trap 'echo "Error on line $LINENO. Failed command: $BASH_COMMAND" >> ${LogDeploy}' ERR
+          
+          # Logging function
+          log_message() {
+            echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> ${LogDeploy}
+          }
+          
+          log_message "Starting installation script"
+          
+          # Install Java 11
+          log_message "Installing Java 11"
+          sudo amazon-linux-extras enable java-openjdk11 || { log_message "Error enabling Java 11"; exit 1; }
+          sudo yum install java-11-openjdk -y || { log_message "Error installing Java 11"; exit 1; }
+          java -version >> ${LogDeploy} 2>&1
+          
+          # Install Git
+          log_message "Installing Git"
+          sudo yum install git -y || { log_message "Error installing Git"; exit 1; }
           git --version >> ${LogDeploy}
+          
           # Install Jenkins
+          log_message "Installing Jenkins"
           sudo rpm --import https://pkg.jenkins.io/redhat/jenkins.io.key
-          sudo tee /etc/yum.repos.d/jenkins.repo <<EOF
-          [jenkins]
-          name=Jenkins-stable
-          baseurl=https://pkg.jenkins.io/redhat-stable
-          gpgcheck=1
-          EOF
-          sudo yum install jenkins -y
+          sudo curl -o /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat/jenkins.repo
+          sudo yum install jenkins -y || { log_message "Error instalando Jenkins"; exit 1; }
+          
+          # Start Jenkins service
+          log_message "Initiating Jenkins service"
           sudo systemctl start jenkins
           sudo systemctl enable jenkins
-          sudo systemctl status jenkins >> ${LogDeploy}
-          if [ $? -eq 0 ]; then
-            echo "Jenkins is installed and running" >> ${LogDeploy}
+          
+          # Verify installation
+          if sudo systemctl is-active jenkins >/dev/null 2>&1; then
+            log_message "Jenkins installed and running successfully"
           else
-            echo "Jenkins is not running" >> ${LogDeploy}
+            log_message "Error: Jenkins is not running"
+            exit 1
           fi
-          echo "$(date '+%Y-%m-%d %H:%M:%S') End Deploy Script" >> ${LogDeploy}
+
+          log_message "Installation script completed"
 
 Outputs:
   JenkinsInstance:
