@@ -19,12 +19,12 @@
 - [x] VPC and Subnet configured in AWS
 - [x] Basic knowledge of AWS CloudFormation
 
-## 📝 Información de Sistema Base
+## 📝 Base System Info
 
 - 🐧 AMI Base: Amazon Linux 2023
 - 🏷️ AMI ID: ami-0b4624933067d393a (us-east-2)
-- 🔄 Versión del Sistema: Amazon Linux 2023 AMI 2023.6.20241212.0 x86_64 HVM kernel-6.1
-- 📦 Características pre-instaladas:
+- 🔄 Version: Amazon Linux 2023 AMI 2023.6.20241212.0 x86_64 HVM kernel-6.1
+- 📦 Pre-installed Features:
   - systemd 252.4
   - yum package manager# 🏗️ Jenkins Server Deployment on AWS EC2
 
@@ -83,22 +83,22 @@ git clone <repository-URL>
 2. Deploy the CloudFormation stack:
 
 ```bash
-# Desplegar stack
+# Deploy stack
 aws cloudformation create-stack \
     --stack-name jenkins-server \
     --template-body file://jenkins-template.yaml \
     --parameters ParameterKey=KeyName,ParameterValue=mi-keypair
 
-# Verificar estado
+# Check status
 aws cloudformation describe-stacks \
     --stack-name jenkins-server
 
-# Actualizar stack
+# Update stack
 aws cloudformation update-stack \
     --stack-name jenkins-server \
     --template-body file://jenkins-template.yaml
 
-# Eliminar stack
+# Delete stack
 aws cloudformation delete-stack \
     --stack-name jenkins-server
 ```
