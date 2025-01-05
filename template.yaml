@@ -24,7 +24,8 @@ Metadata:
           - JenkinsInstanceType
           - JenkinsKeyPair
           - JenkinsSubnet
-          - JenkinsSecurityGroup
+          - JenkinsAllowSSHFrom
+          - JenkinsAllowHTTPFrom
           - JenkinsVolumeSize
           - JenkinsVolumeType
           - JenkinsVolumeIOPS
@@ -33,51 +34,47 @@ Metadata:
           - JenkinsVolumeDeleteOnTermination
           - JenkinsVolumeSnapshotId
           - JenkinsVolumeTags
-          - JenkinsAllowSSHFrom
-          - JenkinsSecurityGroupName
       - Label:
           default: Path Log Deploy
         Parameters:
           - LogDeploy
     ParameterLabels:
-      - AWSRegion:
-          default: AWS Region
-      - AWSAmiId:
-          default: AWS AMI ID
-      - JenkinsVpc:
-          default: Jenkins VPC
-      - JenkinsInstanceName:
-          default: Jenkins Instance Name
-      - JenkinsInstanceType:
-          default: Jenkins Instance Type
-      - JenkinsKeyPair:
-          default: Jenkins Key Pair
-      - JenkinsSubnet:
-          default: Jenkins Subnet
-      - JenkinsSecurityGroup:
-          default: Jenkins Security Group
-      - JenkinsVolumeSize:
-          default: Jenkins Volume Size
-      - JenkinsVolumeType:
-          default: Jenkins Volume Type
-      - JenkinsVolumeIOPS:
-          default: Jenkins Volume IOPS
-      - JenkinsVolumeEncrypted:
-          default: Jenkins Volume Encrypted
-      - JenkinsVolumeKmsKeyId:
-          default: Jenkins Volume KMS Key ID
-      - JenkinsVolumeDeleteOnTermination:
-          default: Jenkins Volume Delete On Termination
-      - JenkinsVolumeSnapshotId:
-          default: Jenkins Volume Snapshot ID
-      - JenkinsVolumeTags:
-          default: Jenkins Volume Tags
-      - JenkinsAllowSSHFrom:
-          default: Allow SSH Traffic From
-      - JenkinsSecurityGroupName:
-          default: Jenkins Security Group Name
-      - LogDeploy:
-          default: Path Log Deploy
+      AWSRegion:
+        default: AWS Region
+      AWSAmiId:
+        default: AWS AMI ID
+      JenkinsVpc:
+        default: Jenkins VPC
+      JenkinsInstanceName:
+        default: Jenkins Instance Name
+      JenkinsInstanceType:
+        default: Jenkins Instance Type
+      JenkinsKeyPair:
+        default: Jenkins Key Pair
+      JenkinsSubnet:
+        default: Jenkins Subnet
+      JenkinsAllowSSHFrom:
+        default: Allow SSH Traffic From
+      JenkinsAllowHTTPFrom:
+        default: Allow HTTP Traffic From
+      JenkinsVolumeSize:
+        default: Jenkins Volume Size
+      JenkinsVolumeType:
+        default: Jenkins Volume Type
+      JenkinsVolumeIOPS:
+        default: Jenkins Volume IOPS
+      JenkinsVolumeEncrypted:
+        default: Jenkins Volume Encrypted
+      JenkinsVolumeKmsKeyId:
+        default: Jenkins Volume KMS Key ID
+      JenkinsVolumeDeleteOnTermination:
+        default: Jenkins Volume Delete On Termination
+      JenkinsVolumeSnapshotId:
+        default: Jenkins Volume Snapshot ID
+      JenkinsVolumeTags:
+        default: Jenkins Volume Tags
+      LogDeploy:
+        default: Path Log Deploy
 
 Parameters:
   AWSRegion:
@@ -118,7 +115,8 @@ Parameters:
     Description: AWS AMI ID
     Default: ami-0b4624933067d393a
     AllowedValues:
-      - ami-06744fbd0847bf4f5 # Amazon Linux 2 (eg)
+      - ami-0b4624933067d393a
+      - ami-06744fbd0847bf4f5
       - ami-1234567890abcdef0
       - ami-0abcdef1234567890
     ConstraintDescription: Must be a valid AMI ID from the list.
@@ -197,19 +195,15 @@ Parameters:
   JenkinsSubnet:
     Type: AWS::EC2::Subnet::Id
     Description: Jenkins Subnet
-  JenkinsSecurityGroup:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Jenkins Security Group
   JenkinsAllowSSHFrom:
     Type: String
     Description: CIDR block to allow SSH access (e.g., 0.0.0.0/0 for all IPs, or a
-      specific range like 192.168.1.0/24).
+      specific range like 192.168.1.0/24)
     Default: 0.0.0.0/0
-  JenkinsSecurityGroupName:
+  JenkinsAllowHTTPFrom:
     Type: String
-    Description: Name of the new Security Group to be created, or leave empty to use
-      an existing one.
-    Default: ''
+    Description: CIDR block to allow HTTP access to Jenkins (port 8080)
+    Default: 0.0.0.0/0
   JenkinsVolumeSize:
     Type: Number
     Description: Jenkins Volume Size
@@ -224,21 +218,23 @@ Parameters:
     AllowedValues:
       - gp2
       - gp3
+      - io1
+      - io2
     ConstraintDescription: Must be a valid volume type from the list.
   JenkinsVolumeIOPS:
     Type: Number
-    Description: Jenkins Volume IOPS
-    Default: '3000'
-    MinValue: '100'
+    Description: Jenkins Volume IOPS (Only applicable for gp3, io1, and io2 volume types)
+    Default: '0'
+    MinValue: '0'
     MaxValue: '20000'
-    ConstraintDescription: Must be between 100 and 20000
+    ConstraintDescription: Must be between 0 and 20000
   JenkinsVolumeEncrypted:
     Type: String
     Description: Jenkins Volume Encrypted
     Default: 'false'
     AllowedValues:
-      - true
-      - false
+      - 'true'
+      - 'false'
     ConstraintDescription: Must be a valid boolean value from the list.
   JenkinsVolumeKmsKeyId:
     Type: String
@@ -250,8 +246,8 @@ Parameters:
     Description: Jenkins Volume Delete On Termination
     Default: 'true'
     AllowedValues:
-      - true
-      - false
+      - 'true'
+      - 'false'
     ConstraintDescription: Must be a valid boolean value from the list.
   JenkinsVolumeTags:
     Type: String
@@ -262,18 +258,18 @@ Parameters:
     Default: /var/log/deploy.log
 
 Conditions:
-  CreateSecurityGroup: !Equals
-    - !Ref JenkinsSecurityGroupName
-    - ''
   CreateKmsKey: !Not
     - !Equals
       - !Ref JenkinsVolumeKmsKeyId
       - ''
+  UseIOPS: !Or
+    - !Equals [!Ref JenkinsVolumeType, 'io1']
+    - !Equals [!Ref JenkinsVolumeType, 'io2']
+    - !Equals [!Ref JenkinsVolumeType, 'gp3']
 
 Resources:
-  JenkinsCustomSecurityGroup:
+  JenkinsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    Condition: CreateSecurityGroup
     Properties:
       GroupDescription: Security Group for Jenkins Server
       VpcId: !Ref JenkinsVpc
@@ -285,7 +281,10 @@ Resources:
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref JenkinsAllowHTTPFrom
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-jenkins-sg
 
   JenkinsInstance:
     Type: AWS::EC2::Instance
@@ -295,22 +294,25 @@ Resources:
       KeyName: !Ref JenkinsKeyPair
       SubnetId: !Ref JenkinsSubnet
       SecurityGroupIds:
-        - !If
-          - CreateSecurityGroup
-          - !Ref JenkinsCustomSecurityGroup
-          - !Ref JenkinsSecurityGroupName
+        - !Ref JenkinsSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: /dev/sda1
+        - DeviceName: /dev/xvda
           Ebs:
             VolumeSize: !Ref JenkinsVolumeSize
             VolumeType: !Ref JenkinsVolumeType
-            Iops: !Ref JenkinsVolumeIOPS
+            Iops: !If
+              - UseIOPS
+              - !Ref JenkinsVolumeIOPS
+              - !Ref AWS::NoValue
             Encrypted: !Ref JenkinsVolumeEncrypted
             DeleteOnTermination: !Ref JenkinsVolumeDeleteOnTermination
             KmsKeyId: !If
               - CreateKmsKey
               - !Ref JenkinsVolumeKmsKeyId
               - !Ref AWS::NoValue
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-jenkins
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash
@@ -325,36 +327,27 @@ Resources:
           log_message "Starting installation script"
           sudo dnf update -y >> ${LogDeploy} 2>&1
           sudo dnf clean packages
-
           # Install Java 17
           log_message "Installing Java 17"
           sudo dnf install java-17-amazon-corretto -y || { log_message "Error enabling Java 17"; exit 1; }
           java -version >> ${LogDeploy} 2>&1
-
           # Install Git
           log_message "Installing Git"
           sudo dnf install git -y || { log_message "Error installing Git"; exit 1; }
           git --version >> ${LogDeploy}
-
           # Install Jenkins
           log_message "Installing Jenkins"
-          sudo curl -fsSL https://pkg.jenkins.io/redhat-stable/jenkins.io.key | sudo tee /etc/pki/rpm-gpg/RPM-GPG-KEY-jenkins
-          sudo sh -c 'echo -e "[jenkins]\nname=Jenkins-stable\nbaseurl=https://pkg.jenkins.io/redhat-stable\nenabled=1\ngpgcheck=1" > /etc/yum.repos.d/jenkins.repo'
-          
-          # Confirm GPG key for Jenkins is installed
-          sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-jenkins
-
-          cat /etc/yum.repos.d/jenkins.repo >> ${LogDeploy}
-
-          sudo dnf install jenkins -y || { log_message "Error installing Jenkins"; exit 1; }
-
+          sudo dnf clean packages
+          sudo wget -O /etc/yum.repos.d/jenkins.repo \
+              https://pkg.jenkins.io/redhat/jenkins.repo
+          sudo rpm --import https://pkg.jenkins.io/redhat/jenkins.io-2023.key
+          sudo yum upgrade
+          # Add required dependencies for the jenkins package
+          sudo yum install jenkins -y || { log_message "Error installing Jenkins"; exit 1; }
           sudo systemctl enable jenkins
           sudo systemctl start jenkins
           sudo systemctl restart jenkins
-          
           sudo systemctl status jenkins >> ${LogDeploy} 2>&1
-
-          
           # Verify installation
           if sudo systemctl is-active jenkins >/dev/null 2>&1; then
             log_message "Jenkins installed and running successfully"
@@ -362,10 +355,29 @@ Resources:
             log_message "Error: Jenkins is not running"
             exit 1
           fi
+          log_message "Admin password:"
           sudo cat /var/lib/jenkins/secrets/initialAdminPassword >> ${LogDeploy}
+
+          # Install AWS CLI
+          log_message "Installing AWS CLI"
+          sudo yum install python3 -y  # Para Amazon Linux 2
+          sudo dnf install python3 -y  # Para Amazon Linux 2023
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+          log_message "AWS CLI installed"
+          rm -rf awscliv2.zip aws
+          aws --version >> ${LogDeploy} 2>&1
+
+
           log_message "Installation script completed"
 
 Outputs:
+  JenkinsSecurityGroup:
+    Description: Security Group created for Jenkins
+    Value: !Ref JenkinsSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-SecurityGroup
   JenkinsInstance:
     Description: Jenkins Instance
     Value: !Ref JenkinsInstance
@@ -381,3 +393,6 @@ Outputs:
     Value: !GetAtt JenkinsInstance.PublicIp
     Export:
       Name: !Sub ${AWS::StackName}-JenkinsInstancePublicIP
+  JenkinsUrl:
+    Description: Jenkins Admin Url
+    Value: !Sub "http://${JenkinsInstance.PublicDnsName}:8080"
