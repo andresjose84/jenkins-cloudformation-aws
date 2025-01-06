@@ -16,6 +16,9 @@ Metadata:
         Parameters:
           - AWSRegion
           - AWSAmiId
+          - HostedZoneId
+          - DomainName
+          - SSLCertificateEmail
           - JenkinsVpc
       - Label:
           default: Jenkins Configuration
@@ -43,6 +46,12 @@ Metadata:
         default: AWS Region
       AWSAmiId:
         default: AWS AMI ID
+      HostedZoneId:
+        default: Hosted Zone Id
+      DomainName:
+        default: Domain Name
+      SSLCertificateEmail:
+        default: SSL Certificate Email
       JenkinsVpc:
         default: Jenkins VPC
       JenkinsInstanceName:
@@ -120,6 +129,20 @@ Parameters:
       - ami-1234567890abcdef0
       - ami-0abcdef1234567890
     ConstraintDescription: Must be a valid AMI ID from the list.
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Select the Hosted Zone ID where the DNS record will be created
+  DomainName:
+    AllowedPattern: ^$|(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$
+    Default: 'jenkins.example.com'
+    Description: The subdomain name for the jenkins server (e.g. jenkins.example.com).
+    Type: String
+  SSLCertificateEmail:
+    Type: String
+    Description: Email address for SSL certificate notifications
+    Default: admin@example.com
+    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+    ConstraintDescription: Must be a valid email address
   JenkinsVpc:
     Type: AWS::EC2::VPC::Id
     Description: ID of the VPC where the resources will be deployed.
@@ -268,6 +291,16 @@ Conditions:
     - !Equals [!Ref JenkinsVolumeType, 'gp3']
 
 Resources:
+  WebRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      TTL: '300'
+      ResourceRecords:
+        - !GetAtt JenkinsInstance.PublicIp
+            
   JenkinsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -278,6 +311,14 @@ Resources:
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref JenkinsAllowSSHFrom
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref JenkinsAllowHTTPFrom
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref JenkinsAllowHTTPFrom
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
@@ -320,55 +361,114 @@ Resources:
           set -e
           # Error handling
           trap 'echo "Error on line $LINENO. Failed command: $BASH_COMMAND" >> ${LogDeploy}' ERR
+          
           # Logging function
           log_message() {
             echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> ${LogDeploy}
           }
+          
           log_message "Starting installation script"
+          
+          # Update system packages
           sudo dnf update -y >> ${LogDeploy} 2>&1
           sudo dnf clean packages
-          # Install Java 17
-          log_message "Installing Java 17"
-          sudo dnf install java-17-amazon-corretto -y || { log_message "Error enabling Java 17"; exit 1; }
-          java -version >> ${LogDeploy} 2>&1
-          # Install Git
-          log_message "Installing Git"
-          sudo dnf install git -y || { log_message "Error installing Git"; exit 1; }
-          git --version >> ${LogDeploy}
+          
+          # Install necessary packages
+          sudo dnf install java-17-amazon-corretto nginx certbot python3-certbot-nginx -y || { log_message "Error installing packages"; exit 1; }
+          
           # Install Jenkins
-          log_message "Installing Jenkins"
-          sudo dnf clean packages
-          sudo wget -O /etc/yum.repos.d/jenkins.repo \
-              https://pkg.jenkins.io/redhat/jenkins.repo
+          sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat/jenkins.repo
           sudo rpm --import https://pkg.jenkins.io/redhat/jenkins.io-2023.key
-          sudo yum upgrade
-          # Add required dependencies for the jenkins package
           sudo yum install jenkins -y || { log_message "Error installing Jenkins"; exit 1; }
-          sudo systemctl enable jenkins
-          sudo systemctl start jenkins
-          sudo systemctl restart jenkins
-          sudo systemctl status jenkins >> ${LogDeploy} 2>&1
-          # Verify installation
-          if sudo systemctl is-active jenkins >/dev/null 2>&1; then
-            log_message "Jenkins installed and running successfully"
-          else
-            log_message "Error: Jenkins is not running"
-            exit 1
-          fi
-          log_message "Admin password:"
-          sudo cat /var/lib/jenkins/secrets/initialAdminPassword >> ${LogDeploy}
+          
+          # Configure Jenkins
+          sudo mkdir -p /etc/jenkins
+          sudo cat > /etc/jenkins/jenkins.xml << 'EOL'
+          <?xml version='1.0' encoding='UTF-8'?>
+          <jenkins>
+            <systemMessage>Jenkins URL: https://${DomainName}/</systemMessage>
+            <jenkinsUrl>https://${DomainName}/</jenkinsUrl>
+          </jenkins>
+          EOL
+          
+          # Configure Nginx as reverse proxy
+          sudo cat > /etc/nginx/conf.d/jenkins.conf << 'EOL'
+          server {
+              listen 80;
+              server_name ${DomainName};
+              
+              location / {
+                  proxy_pass http://localhost:8080;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+          EOL
+          
+          # Start and enable services
+          sudo systemctl enable jenkins nginx
+          sudo systemctl start jenkins nginx
+          
+          # Wait for Jenkins to start
+          while ! sudo test -f /var/lib/jenkins/secrets/initialAdminPassword; do
+            sleep 10
+          done
+          
+          # Get Jenkins initial admin password
+          JENKINS_PASSWORD=$(sudo cat /var/lib/jenkins/secrets/initialAdminPassword)
+          log_message "Jenkins initial admin password: $JENKINS_PASSWORD"
+          
+          # Configure SSL with Certbot (automated)
+          sudo certbot --nginx \
+            --non-interactive \
+            --agree-tos \
+            --email ${SSLCertificateEmail} \
+            -d ${DomainName} \
+            --redirect
+          
+          log_message "Installation and configuration completed"
+
+          # Verify certbot timer and service
+          log_message "Configuring automatic certificate renewal"
+          
+          # Enable and start the certbot timer
+          sudo systemctl enable certbot-renew.timer
+          sudo systemctl start certbot-renew.timer
+          
+          # Verify the timer status
+          sudo systemctl status certbot-renew.timer >> ${LogDeploy} 2>&1
+          
+          # Create a test script to verify renewal works
+          sudo certbot renew --dry-run >> ${LogDeploy} 2>&1
+          
+          # Create a post-renewal hook to restart nginx
+          sudo mkdir -p /etc/letsencrypt/renewal-hooks/post/
+          sudo cat > /etc/letsencrypt/renewal-hooks/post/nginx-restart.sh << 'EOL'
+          #!/bin/bash
+          systemctl restart nginx
+          EOL
+          
+          sudo chmod +x /etc/letsencrypt/renewal-hooks/post/nginx-restart.sh
+          
+          # Add a cron job to check certificate expiration
+          echo "0 0 1 * * root certbot certificates | grep 'VALID:' | mail -s 'SSL Certificate Status for ${DomainName}' ${SSLCertificateEmail}" | sudo tee -a /etc/crontab > /dev/null
+          
+          log_message "Certificate renewal configuration completed"
+          
+          # Show renewal timer details
+          log_message "Next automatic renewal scheduled for:"
+          sudo systemctl list-timers certbot-renew.timer >> ${LogDeploy} 2>&1
 
           # Install AWS CLI
           log_message "Installing AWS CLI"
-          sudo yum install python3 -y  # Para Amazon Linux 2
-          sudo dnf install python3 -y  # Para Amazon Linux 2023
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
           unzip awscliv2.zip
           sudo ./aws/install
-          log_message "AWS CLI installed"
           rm -rf awscliv2.zip aws
+          log_message "AWS CLI installed"
           aws --version >> ${LogDeploy} 2>&1
-
 
           log_message "Installation script completed"
 
@@ -396,3 +496,6 @@ Outputs:
   JenkinsUrl:
     Description: Jenkins Admin Url
     Value: !Sub "http://${JenkinsInstance.PublicDnsName}:8080"
+  JenkinsDomainName:
+    Description: Jenkins Domain Name
+    Value: !Sub https://${DomainName}
