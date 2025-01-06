@@ -5,13 +5,13 @@
 ## 🌟 Key Features
 
 - ⚡ Automated Jenkins installation
-- ☕ Java 11 pre-installed
-- 💾 Configurable EBS volume
+- ☕ Java 17 pre-installed
+- 📀 Configurable EBS volume
 - 🔒 Available encryption options
 - 🛡️ Automatic security group creation
 - 🔧 AWS CLI integration
 
-## 📋 Prerequisites
+## 👌 Prerequisites
 
 - [x] AWS account with sufficient permissions
 - [x] AWS CLI installed and configured
@@ -19,7 +19,7 @@
 - [x] VPC and Subnet configured in AWS
 - [x] Basic knowledge of AWS CloudFormation
 
-## 📝 Base System Info
+## 📜 Base System Information
 
 - 🐧 AMI Base: Amazon Linux 2023
 - 🏷️ AMI ID: ami-0b4624933067d393a (us-east-2)
@@ -27,25 +27,6 @@
 - 📦 Pre-installed Features:
   - systemd 252.4
   - yum package manager# 🏗️ Jenkins Server Deployment on AWS EC2
-
-> Automated Jenkins server deployment on AWS EC2 using CloudFormation
-
-## 🌟 Key Features
-
-- ⚡ Automated Jenkins installation
-- ☕ Java 11 pre-installed
-- 💾 Configurable EBS volume
-- 🔒 Available encryption options
-- 🛡️ Automatic security group creation
-- 🔧 AWS CLI integration
-
-## 📋 Prerequisites
-
-- [x] AWS account with sufficient permissions
-- [x] AWS CLI installed and configured
-- [x] Existing SSH key pair in AWS
-- [x] VPC and Subnet configured in AWS
-- [x] Basic knowledge of AWS CloudFormation
 
 ## 📝 Base System Information
 
@@ -65,12 +46,11 @@ This implementation is optimized for Amazon Linux 2023. This distribution is rec
 
 ## ⚙️ Main Parameters
 
-| Parameter | Description | Default Value |
-|-----------|-------------|---------------|
-| AWSRegion | AWS Region for deployment | us-east-1 |
-| JenkinsInstanceType | EC2 instance type | t2.micro |
-| JenkinsVolumeSize | EBS volume size (GB) | 16 |
-| JenkinsAllowSSHFrom | CIDR for SSH access | 0.0.0.0/0 |
+| Parameter              | Description                                     | Default Value         |
+|------------------------|-------------------------------------------------|-----------------------|
+| AWSRegion             | AWS Region for deployment                      | us-east-1            |
+| JenkinsInstanceType   | EC2 instance type                               | t2.micro             |
+| JenkinsVolumeSize     | EBS volume size (GB)                            | 16                   |
 
 ## 🚀 Deployment
 
@@ -103,22 +83,22 @@ aws cloudformation delete-stack \
     --stack-name jenkins-server
 ```
 
-3. Connect Ec2 Instance
+3. Connect to the EC2 Instance:
 
 ```bash
 ssh -i "<name-key>.pem" ec2-user@<public-ip>.<region>.compute.amazonaws.com
 ```
 
-4. Get Admin Password
+4. Get the Jenkins Admin Password:
 
 ```bash
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 ```
 
-5. Accessing Jenkins
+5. Access Jenkins:
 
-Wait approximately 5-10 minutes after deployment
-Access Jenkins using:
+- Wait approximately 5-10 minutes after deployment.
+- Access Jenkins using:
 
 ```
 http://<public-ip>:8080
@@ -167,8 +147,8 @@ Contributions are welcome. Please:
 
 ## 📝 License
 
-This project is under the MIT License - see the LICENSE file for details
+This project is under the MIT License - see the LICENSE file for details.
 
-## ✒️ Author
+## ✍️ Author
 
 Andres Jose Sanchez - Initial Development - [andresjose84@gmail.com]
