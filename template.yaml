@@ -369,6 +369,9 @@ Resources:
           rm -rf awscliv2.zip aws
           aws --version >> ${LogDeploy} 2>&1
 
+          # Install Php
+          sudo dnf install php -y
+          sudo dnf install composer -y
 
           log_message "Installation script completed"
 
